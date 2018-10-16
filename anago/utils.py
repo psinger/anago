@@ -104,13 +104,14 @@ class Vocabulary(object):
         _id2token: A list of token strings indexed by their numerical identifiers.
     """
 
-    def __init__(self, max_size=None, min_freq=1, lower=True, unk_token=True, specials=('<pad>',)):
+    def __init__(self, max_size=None, min_freq=1, alphanumerical=False, lower=True, unk_token=True, specials=('<pad>',)):
         """Create a Vocabulary object.
 
         Args:
             max_size: The maximum size of the vocabulary, or None for no
                 maximum. Default: None.
             min_freq: Minimum document frequency
+            alphanumerical: If true, only consider alphanumerical characters
             lower: boolean. Whether to convert the texts to lowercase.
             unk_token: boolean. Whether to add unknown token.
             specials: The list of special tokens (e.g., padding or eos) that
@@ -118,6 +119,7 @@ class Vocabulary(object):
         """
         self._max_size = max_size
         self._min_freq = min_freq
+        self._alphanumerical = alphanumerical
         self._lower = lower
         self._unk = unk_token
         self._token2id = {token: i for i, token in enumerate(specials)}
@@ -178,6 +180,10 @@ class Vocabulary(object):
         for i, k in enumerate(token_freq):
             if k[1] < self._min_freq:
                 del token_freq[i]
+            if self._alphanumerical:
+                if not k[0].isalnum():
+                    del token_freq[i]
+                
         idx = len(self.vocab)
         for token, _ in token_freq:
             self._token2id[token] = idx

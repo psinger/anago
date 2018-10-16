@@ -33,8 +33,8 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, lower=True, num_norm=True,
-                 use_char=True, initial_vocab=None, max_size=None, min_freq=1,
-                max_sent_len=100, max_char_len=20):
+                 use_char=True, initial_vocab=None, max_size=None, min_freq=1, alphanumerical=False,
+                max_sent_len=100, max_word_len=20):
         """Create a preprocessor object.
 
         Args:
@@ -45,12 +45,13 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
         """
         self._num_norm = num_norm
         self._use_char = use_char
-        self._word_vocab = Vocabulary(lower=lower, max_size=max_size, min_freq=min_freq)
+        self._word_vocab = Vocabulary(lower=lower, max_size=max_size, min_freq=min_freq, alphanumerical=alphanumerical)
         self._char_vocab = Vocabulary(lower=False)
         self._label_vocab = Vocabulary(lower=False, unk_token=False)
         
+        # currently not implemented
         self._max_sent_len = max_sent_len
-        self._max_char_len = max_char_len
+        self._max_word_len = max_word_len
 
         if initial_vocab:
             self._word_vocab.add_documents([initial_vocab])
@@ -92,11 +93,11 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
             y: label id matrix.
         """
         word_ids = [self._word_vocab.doc2id(doc) for doc in X]
-        word_ids = pad_sequences(word_ids, maxlen=self._max_sent_len, padding='post')
+        word_ids = pad_sequences(word_ids, padding='post')
 
         if self._use_char:
             char_ids = [[self._char_vocab.doc2id(w) for w in doc] for doc in X]
-            char_ids = pad_nested_sequences(char_ids, self._max_sent_len, self._max_char_len)
+            char_ids = pad_nested_sequences(char_ids)
             features = [word_ids, char_ids]
         else:
             features = word_ids
@@ -170,7 +171,7 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
         return p
 
 
-def pad_nested_sequences(sequences, max_sent_len, max_word_len, dtype='int32'):
+def pad_nested_sequences(sequences,  dtype='int32'):
     """Pads nested sequences to the same length.
 
     This function transforms a list of list sequences
@@ -183,11 +184,12 @@ def pad_nested_sequences(sequences, max_sent_len, max_word_len, dtype='int32'):
     # Returns
         x: Numpy array.
     """
-
+    max_sent_len = 0
+    max_word_len = 0
     for sent in sequences:
-        max_sent_len = min(len(sent), max_sent_len)
+        max_sent_len = max(len(sent), max_sent_len)
         for word in sent:
-            max_word_len = min(len(word), max_word_len)
+            max_word_len = max(len(word), max_word_len)
 
     x = np.zeros((len(sequences), max_sent_len, max_word_len)).astype(dtype)
     for i, sent in enumerate(sequences):
