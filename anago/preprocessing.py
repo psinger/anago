@@ -13,8 +13,8 @@ from keras.preprocessing.sequence import pad_sequences
 
 from anago.utils import Vocabulary
 
-options_file = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json'
-weight_file = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5'
+#options_file = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json'
+#weight_file = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5'
 
 
 def normalize_number(text):
@@ -33,7 +33,8 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, lower=True, num_norm=True,
-                 use_char=True, initial_vocab=None):
+                 use_char=True, initial_vocab=None, max_size=None, min_freq=1,
+                max_sent_len=100, max_char_len=20):
         """Create a preprocessor object.
 
         Args:
@@ -44,9 +45,12 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
         """
         self._num_norm = num_norm
         self._use_char = use_char
-        self._word_vocab = Vocabulary(lower=lower)
+        self._word_vocab = Vocabulary(lower=lower, max_size=max_size, min_freq=min_freq)
         self._char_vocab = Vocabulary(lower=False)
         self._label_vocab = Vocabulary(lower=False, unk_token=False)
+        
+        self._max_sent_len = max_sent_len
+        self._max_char_len = max_char_len
 
         if initial_vocab:
             self._word_vocab.add_documents([initial_vocab])
@@ -88,11 +92,11 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
             y: label id matrix.
         """
         word_ids = [self._word_vocab.doc2id(doc) for doc in X]
-        word_ids = pad_sequences(word_ids, padding='post')
+        word_ids = pad_sequences(word_ids, maxlen=self._max_sent_len, padding='post')
 
         if self._use_char:
             char_ids = [[self._char_vocab.doc2id(w) for w in doc] for doc in X]
-            char_ids = pad_nested_sequences(char_ids)
+            char_ids = pad_nested_sequences(char_ids, self._max_sent_len, self._max_char_len)
             features = [word_ids, char_ids]
         else:
             features = word_ids
@@ -166,7 +170,7 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
         return p
 
 
-def pad_nested_sequences(sequences, dtype='int32'):
+def pad_nested_sequences(sequences, max_sent_len, max_word_len, dtype='int32'):
     """Pads nested sequences to the same length.
 
     This function transforms a list of list sequences
@@ -179,12 +183,11 @@ def pad_nested_sequences(sequences, dtype='int32'):
     # Returns
         x: Numpy array.
     """
-    max_sent_len = 0
-    max_word_len = 0
+
     for sent in sequences:
-        max_sent_len = max(len(sent), max_sent_len)
+        max_sent_len = min(len(sent), max_sent_len)
         for word in sent:
-            max_word_len = max(len(word), max_word_len)
+            max_word_len = min(len(word), max_word_len)
 
     x = np.zeros((len(sequences), max_sent_len, max_word_len)).astype(dtype)
     for i, sent in enumerate(sequences):
@@ -215,12 +218,15 @@ class ELMoTransformer(IndexTransformer):
             features: document id matrix.
             y: label id matrix.
         """
+        print("word ids")
         word_ids = [self._word_vocab.doc2id(doc) for doc in X]
         word_ids = pad_sequences(word_ids, padding='post')
 
+        print("character ids")
         char_ids = [[self._char_vocab.doc2id(w) for w in doc] for doc in X]
         char_ids = pad_nested_sequences(char_ids)
 
+        print("elmo")
         character_ids = batch_to_ids(X)
         elmo_embeddings = self._elmo(character_ids)['elmo_representations'][1]
         elmo_embeddings = elmo_embeddings.detach().numpy()
