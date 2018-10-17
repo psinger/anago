@@ -49,7 +49,7 @@ class BiLSTMCRF(object):
                  embeddings=None,
                  use_char=True,
                  use_crf=True,
-                 user_keras_crf=False,
+                 use_keras_crf=False,
                 use_cudnn=False):
         """Build a Bi-LSTM CRF model.
 
